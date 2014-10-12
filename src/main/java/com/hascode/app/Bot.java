@@ -2,11 +2,10 @@ package com.hascode.app;
 
 import java.time.Instant;
 
-import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.xmpp.XmppMessage;
-import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.main.Main;
 import org.jivesoftware.smack.packet.Message;
 
 import com.tngtech.configbuilder.ConfigBuilder;
@@ -21,18 +20,16 @@ public class Bot {
 		String chatEndpoint = String.format("xmpp://%s@%s:%s?room=%s&password=%s&nickname=%s", config.getUser(), config.getHost(), config.getPort(), config.getRoom(), config.getPassword(),
 				config.getNickname());
 
-		CamelContext context = new DefaultCamelContext();
-		context.addRoutes(new RouteBuilder() {
+		Main main = new Main();
+		main.addRouteBuilder(new RouteBuilder() {
 			@Override
 			public void configure() {
 				from(chatEndpoint).filter(exchange -> isValidBotCommand(exchange)).choice().when(exchange -> getSmackMessage(exchange).getBody().contains("date"))
-				.setBody(constant("It's " + Instant.now())).to(chatEndpoint).otherwise().setBody(constant("Available commands: bot date, bot help")).to(chatEndpoint);
+						.setBody(constant("It's " + Instant.now())).to(chatEndpoint).otherwise().setBody(constant("Available commands: bot date, bot help")).to(chatEndpoint);
 			}
 		});
-		context.start();
-		while (true) {
-
-		}
+		main.enableHangupSupport();
+		main.run();
 	}
 
 	private boolean isValidBotCommand(final Exchange exchange) {
