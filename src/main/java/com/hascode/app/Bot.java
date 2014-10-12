@@ -1,28 +1,32 @@
 package com.hascode.app;
 
-import javax.jms.ConnectionFactory;
+import java.time.Instant;
 
-import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.camel.CamelContext;
+import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.component.jms.JmsComponent;
+import org.apache.camel.component.xmpp.XmppMessage;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jivesoftware.smack.packet.Message;
 
 import com.tngtech.configbuilder.ConfigBuilder;
 
 public class Bot {
 	public static void main(final String[] args) throws Exception {
+		new Bot().run();
+	}
+
+	private void run() throws Exception {
 		Config config = new ConfigBuilder<Config>(Config.class).build();
-		String route = String.format("xmpp://%s@%s:%s/?room=%s&password=%s&nickname=%s", config.getUser(), config.getHost(), config.getPort(), config.getRoom(), config.getPassword(),
+		String chatEndpoint = String.format("xmpp://%s@%s:%s?room=%s&password=%s&nickname=%s", config.getUser(), config.getHost(), config.getPort(), config.getRoom(), config.getPassword(),
 				config.getNickname());
+
 		CamelContext context = new DefaultCamelContext();
-		ConnectionFactory connectionFactory = new ActiveMQConnectionFactory("vm://localhost?broker.persistent=false");
-		context.addComponent("activemq", JmsComponent.jmsComponentAutoAcknowledge(connectionFactory));
 		context.addRoutes(new RouteBuilder() {
 			@Override
 			public void configure() {
-				from(route).to("activemq:chat.room");
-				from("timer://kickoff?period=20000").setBody(constant("Domo arigato mr roboto...")).to(route);
+				from(chatEndpoint).filter(exchange -> isValidBotCommand(exchange)).choice().when(exchange -> getSmackMessage(exchange).getBody().contains("date"))
+				.setBody(constant("It's " + Instant.now())).to(chatEndpoint).otherwise().setBody(constant("Available commands: bot date, bot help")).to(chatEndpoint);
 			}
 		});
 		context.start();
@@ -30,4 +34,15 @@ public class Bot {
 
 		}
 	}
+
+	private boolean isValidBotCommand(final Exchange exchange) {
+		return getSmackMessage(exchange).getBody().matches("bot (date|help)");
+	}
+
+	private Message getSmackMessage(final Exchange exchange) {
+		XmppMessage xmppMessage = (XmppMessage) exchange.getIn();
+		Message smackMessage = xmppMessage.getXmppMessage();
+		return smackMessage;
+	}
+
 }
